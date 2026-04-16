@@ -1,13 +1,142 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Muğla Billboard Takip v2.0</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; background: #0f0f1a; overflow: hidden; }
+        #map { height: 100vh; width: 100%; z-index: 1; }
+        .check-in-panel {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #1a1a2e; color: white; padding: 24px;
+            border-top-left-radius: 28px; border-top-right-radius: 28px;
+            z-index: 1000; box-shadow: 0 -10px 40px rgba(0,0,0,0.7);
+        }
+        .billboard-input {
+            background: #16213e; border: 2px solid #2e2e4e; color: white;
+            border-radius: 14px; padding: 12px; width: 100%; margin-bottom: 15px; outline: none;
+        }
+        .action-button {
+            background: linear-gradient(135deg, #6e48aa 0%, #9d50bb 100%);
+            color: white; font-weight: bold; border-radius: 16px; padding: 16px; width: 100%;
+            display: flex; align-items: center; justify-content: center; gap: 10px; border: none;
+        }
+        #preview { width: 100%; height: 140px; border-radius: 12px; object-fit: cover; display: none; margin-bottom: 15px; }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: none; justify-content: center;
+            align-items: center; z-index: 2000; color: white;
+        }
+    </style>
+</head>
+<body>
 
+    <div id="map"></div>
+    <div id="loading" class="loading-overlay">Veri Gönderiliyor...</div>
+
+    <div class="check-in-panel">
+        <div class="text-[10px] text-gray-500 font-bold tracking-widest mb-1 uppercase">Muğla Büyükşehir Belediyesi</div>
+        <div class="text-xl font-bold mb-4">Yeni Billboard Ekle</div>
+        
+        <input type="text" id="billboard-name" class="billboard-input" placeholder="Billboard Tanımı (Örn: Menteşe A-1)">
+        <input type="file" accept="image/*" capture="camera" id="photo-input" style="display:none">
+        <img id="preview" src="">
+
+        <button class="action-button" onclick="handleAction()" id="main-btn">
+            <span id="btn-icon">📷</span> <span id="btn-text">Fotoğraf Çek</span>
+        </button>
+    </div>
+
+    <script>
+        // Bağlantı Ayarları
+        const SUPABASE_URL = 'https://ikeehstbsjfdxjdehmir.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlrZWVoc3Ric2pmZHhqZGVobWlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzEzOTMsImV4cCI6MjA5MTkwNzM5M30.QRnZKY9uPxGiTA1UV1zyjOf02j5E4V22-5p7y_D_0qk';
+        
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // Harita Kurulumu
+        var map = L.map('map', { zoomControl: false }).setView([37.215, 28.363], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        var userMarker, capturedPhoto = null;
+
+        // 1. Veritabanındaki Eski Verileri Yükle
+        async function fetchPoints() {
+            const { data, error } = await supabaseClient.from('billboards').select('*');
+            if (data) {
+                data.forEach(p => {
+                    L.marker([p.lat, p.lng]).addTo(map)
+                        .bindPopup(`<b>${p.name}</b><br><img src="${p.image_url}" width="150" style="border-radius:8px; margin-top:5px;">`);
+                });
+            }
+        }
+        fetchPoints();
+
+        // 2. Kullanıcı Konum Takibi
+        map.on('locationfound', e => {
+            if (!userMarker) {
+                userMarker = L.circleMarker(e.latlng, { radius: 8, fillColor: "#9d50bb", color: "#fff", weight: 2, fillOpacity: 0.9 }).addTo(map);
+                map.setView(e.latlng, 17);
+            } else { userMarker.setLatLng(e.latlng); }
+        });
+        map.locate({setView: true, watch: true, enableHighAccuracy: true});
+
+        // 3. Buton Kontrolü
+        function handleAction() {
+            if (!capturedPhoto) {
+                document.getElementById('photo-input').click();
+            } else {
+                saveToDatabase();
+            }
+        }
+
+        // 4. Fotoğraf İşleme
+        document.getElementById('photo-input').onchange = e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                document.getElementById('preview').src = event.target.result;
+                document.getElementById('preview').style.display = 'block';
+                capturedPhoto = event.target.result;
+                document.getElementById('btn-text').innerText = "Veritabanına Kaydet";
+                document.getElementById('btn-icon').innerText = "💾";
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // 5. Supabase'e Kayıt
+        async function saveToDatabase() {
+            const name = document.getElementById('billboard-name').value;
+            if (!name) { alert("Lütfen bir isim girin!"); return; }
+            
+            document.getElementById('loading').style.display = 'flex';
+            const pos = userMarker.getLatLng();
+
+            const { error } = await supabaseClient.from('billboards').insert([
+                { 
+                    name: name, 
+                    image_url: capturedPhoto, 
+                    lat: pos.lat, 
+                    lng: pos.lng 
+                }
+            ]);
+
+            document.getElementById('loading').style.display = 'none';
+
+            if (error) { 
+                alert("Hata: " + error.message); 
+            } else {
+                alert("Başarıyla kaydedildi!");
+                location.reload(); 
+            }
+        }
+    </script>
+</body>
+</html>
