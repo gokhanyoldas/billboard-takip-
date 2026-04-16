@@ -1,0 +1,9 @@
+{
+  "name": "Billboard Takip Sistemi",
+  "description": "Muğla'nın 13 ilçesindeki billboardları takip eden, konum tabanlı fotoğraf yükleme özellikli check-in uygulaması.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ],
+  "majorCapabilities": []
+}
