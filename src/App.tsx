@@ -27,6 +27,7 @@ const DISTRICTS = [
 export default function App() {
   const [map, setMap] = useState<L.Map | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [pinLocation, setPinLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [billboards, setBillboards] = useState<Billboard[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [showList, setShowList] = useState(false);
@@ -74,6 +75,12 @@ export default function App() {
       maxZoom: 19,
     }).addTo(newMap);
 
+    // Track map center
+    newMap.on('move', () => {
+      const center = newMap.getCenter();
+      setPinLocation({ lat: center.lat, lng: center.lng });
+    });
+
     setMap(newMap);
     getCurrentLocation(newMap);
 
@@ -109,7 +116,7 @@ export default function App() {
               fillOpacity: 1
             }).addTo(activeMap);
             
-            userMarkerRef.current.bindPopup("Siz buradasınız").openPopup();
+            userMarkerRef.current.bindPopup("Siz buradasınız");
           }
         },
         () => {
@@ -138,7 +145,9 @@ export default function App() {
 
     // Add new markers
     billboards.forEach(bb => {
-      const marker = L.marker([bb.lat, bb.lng], { icon: billboardIcon }).addTo(map);
+      const marker = L.marker([bb.lat, bb.lng], { 
+        icon: billboardIcon
+      }).addTo(map);
       
       const popupContent = `
         <div style="color: #1f2937; padding: 4px; min-width: 150px;">
@@ -173,13 +182,13 @@ export default function App() {
   };
 
   const saveBillboard = () => {
-    if (!userLocation || !capturedPhoto) return;
+    if (!pinLocation || !capturedPhoto) return;
 
     const newBillboard: Billboard = {
       id: Date.now().toString(),
       name: billboardName || `${selectedDistrict} Billboard`,
-      lat: userLocation.lat,
-      lng: userLocation.lng,
+      lat: pinLocation.lat,
+      lng: pinLocation.lng,
       photo: capturedPhoto,
       timestamp: Date.now(),
       district: selectedDistrict,
@@ -195,6 +204,20 @@ export default function App() {
     <div className="relative h-screen w-full bg-[#0f172a] text-white font-sans overflow-hidden">
       {/* Map Container */}
       <div ref={mapRef} className="absolute inset-0 z-0" />
+
+      {/* Center Crosshair (Hedef Göstergesi) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+        <div className="relative flex items-center justify-center">
+          {/* Outer ring */}
+          <div className="w-10 h-10 border-2 border-purple-500/50 rounded-full animate-pulse" />
+          {/* Inner dot */}
+          <div className="absolute w-2 h-2 bg-purple-500 rounded-full" />
+          {/* Horizontal line */}
+          <div className="absolute w-6 h-[2px] bg-purple-500/80" />
+          {/* Vertical line */}
+          <div className="absolute w-[2px] h-6 bg-purple-500/80" />
+        </div>
+      </div>
 
       {/* Header Overlay */}
       <div className="absolute top-0 left-0 right-0 p-6 z-10 bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
@@ -307,12 +330,12 @@ export default function App() {
               {/* Location Info */}
               <div className="bg-white/5 rounded-2xl p-4 border border-white/10 flex items-center gap-4">
                 <div className="p-3 bg-purple-500/20 rounded-xl text-purple-400">
-                  <Navigation size={20} />
+                  <MapPin size={20} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 uppercase font-bold">Anlık Konum</p>
+                  <p className="text-xs text-gray-400 uppercase font-bold">İşaretlenen Konum</p>
                   <p className="text-sm font-mono">
-                    {userLocation ? `${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}` : 'Konum alınıyor...'}
+                    {pinLocation ? `${pinLocation.lat.toFixed(6)}, ${pinLocation.lng.toFixed(6)}` : 'Konum alınıyor...'}
                   </p>
                 </div>
               </div>
@@ -320,7 +343,7 @@ export default function App() {
 
             <div className="absolute bottom-10 left-6 right-6">
               <button
-                disabled={!capturedPhoto || !userLocation}
+                disabled={!capturedPhoto || !pinLocation}
                 onClick={saveBillboard}
                 className="w-full bg-white text-black py-4 rounded-2xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
