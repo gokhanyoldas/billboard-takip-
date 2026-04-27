@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Muğla Billboard Takip v3.1</title>
+    <title>Muğla Billboard Takip v3.2</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -40,6 +40,16 @@
             width: 50px; height: 50px; border-radius: 50%; font-size: 24px;
             display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
+        /* Popup içindeki resim stili */
+        .popup-img {
+            border-radius: 8px;
+            margin-top: 8px;
+            cursor: zoom-in;
+            transition: transform 0.2s;
+        }
+        .popup-img:hover {
+            transform: scale(1.02);
+        }
     </style>
 </head>
 <body>
@@ -49,7 +59,7 @@
     
     <div id="loading" class="loading-overlay">
         <div class="text-xl font-bold mb-2">Yükleniyor...</div>
-        <div class="text-sm text-gray-400">Dosya kaydediliyor, lütfen bekleyin.</div>
+        <div class="text-sm text-gray-400">Veriler kaydediliyor, lütfen bekleyin.</div>
     </div>
 
     <div class="check-in-panel">
@@ -75,31 +85,33 @@
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
         var userMarker, selectedFile = null;
-        var isFollowing = true; // Serbest gezinti takibi
+        var isFollowing = true; 
 
-        // Haritadaki eski verileri yükle
         async function fetchPoints() {
             const { data, error } = await supabaseClient.from('billboards').select('*');
             if (data) {
                 data.forEach(p => {
-                    L.marker([p.lat, p.lng]).addTo(map)
-                        .bindPopup(`<b>${p.name}</b><br><img src="${p.image_url}" width="150" style="border-radius:8px; margin-top:5px;">`);
+                    // RESİM TIKLAMA ÖZELLİĞİ BURADA: <a> etiketi ile sarmaladık
+                    const popupContent = `
+                        <div style="text-align:center;">
+                            <b style="font-size:14px;">${p.name}</b><br>
+                            <a href="${p.image_url}" target="_blank" title="Büyük boyutta aç">
+                                <img src="${p.image_url}" width="150" class="popup-img">
+                            </a>
+                            <p style="font-size:10px; color:#666; margin-top:5px;">Resmi büyütmek için tıkla</p>
+                        </div>
+                    `;
+                    L.marker([p.lat, p.lng]).addTo(map).bindPopup(popupContent);
                 });
             }
         }
         fetchPoints();
 
-        // Kullanıcı haritayı kaydırırsa otomatik takibi durdur
-        map.on('movestart', function() {
-            isFollowing = false;
-        });
+        map.on('movestart', function() { isFollowing = false; });
 
-        //📍 Butonuna basınca takibi geri aç ve konuma odaklan
         document.getElementById('locate-btn').onclick = function() {
             isFollowing = true;
-            if (userMarker) {
-                map.setView(userMarker.getLatLng(), 17);
-            }
+            if (userMarker) { map.setView(userMarker.getLatLng(), 17); }
         };
 
         map.on('locationfound', e => {
@@ -108,19 +120,14 @@
                 map.setView(e.latlng, 17);
             } else { 
                 userMarker.setLatLng(e.latlng);
-                if (isFollowing) {
-                    map.setView(e.latlng, map.getZoom());
-                }
+                if (isFollowing) { map.setView(e.latlng, map.getZoom()); }
             }
         });
         map.locate({watch: true, enableHighAccuracy: true});
 
         function handleAction() {
-            if (!selectedFile) {
-                document.getElementById('photo-input').click();
-            } else {
-                uploadAndSave();
-            }
+            if (!selectedFile) { document.getElementById('photo-input').click(); } 
+            else { uploadAndSave(); }
         }
 
         document.getElementById('photo-input').onchange = e => {
@@ -138,13 +145,11 @@
         async function uploadAndSave() {
             const name = document.getElementById('billboard-name').value;
             if (!name) { alert("Lütfen bir isim girin!"); return; }
-            
             document.getElementById('loading').style.display = 'flex';
             
             const fileName = `billboard_${Date.now()}.jpg`;
             const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                .from('billboards')
-                .upload(fileName, selectedFile);
+                .from('billboards').upload(fileName, selectedFile);
 
             if (uploadError) {
                 alert("Yükleme Hatası: " + uploadError.message);
@@ -152,25 +157,17 @@
                 return;
             }
 
-            const { data: urlData } = supabaseClient.storage
-                .from('billboards')
-                .getPublicUrl(fileName);
-            
+            const { data: urlData } = supabaseClient.storage.from('billboards').getPublicUrl(fileName);
             const publicUrl = urlData.publicUrl;
-
             const pos = userMarker.getLatLng();
+
             const { error: dbError } = await supabaseClient.from('billboards').insert([
                 { name: name, image_url: publicUrl, lat: pos.lat, lng: pos.lng }
             ]);
 
             document.getElementById('loading').style.display = 'none';
-
-            if (dbError) { 
-                alert("Veritabanı Hatası: " + dbError.message); 
-            } else {
-                alert("Başarıyla kaydedildi!");
-                location.reload(); 
-            }
+            if (dbError) { alert("Veritabanı Hatası: " + dbError.message); } 
+            else { alert("Başarıyla kaydedildi!"); location.reload(); }
         }
     </script>
 </body>
