@@ -11,6 +11,7 @@ import L from 'leaflet';
 // Types
 interface Billboard {
   id: string;
+  name: string;
   lat: number;
   lng: number;
   photo: string;
@@ -29,6 +30,7 @@ export default function App() {
   const [billboards, setBillboards] = useState<Billboard[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [showList, setShowList] = useState(false);
+  const [billboardName, setBillboardName] = useState('');
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState(DISTRICTS[0]);
   
@@ -140,8 +142,13 @@ export default function App() {
       
       const popupContent = `
         <div style="color: #1f2937; padding: 4px; min-width: 150px;">
-          <h3 style="font-weight: bold; margin-bottom: 4px; color: #7c3aed;">${bb.district}</h3>
+          <h3 style="font-weight: bold; margin-bottom: 2px; color: #7c3aed;">${bb.name}</h3>
+          <p style="font-size: 11px; color: #6b7280; margin-bottom: 6px;">${bb.district}</p>
           <img src="${bb.photo}" style="width: 100%; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);" />
+          <p style="font-size: 10px; color: #9ca3af; font-family: monospace; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            ${bb.lat.toFixed(6)}, ${bb.lng.toFixed(6)}
+          </p>
           <p style="font-size: 11px; color: #6b7280; display: flex; align-items: center; gap: 4px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             ${new Date(bb.timestamp).toLocaleString()}
@@ -170,6 +177,7 @@ export default function App() {
 
     const newBillboard: Billboard = {
       id: Date.now().toString(),
+      name: billboardName || `${selectedDistrict} Billboard`,
       lat: userLocation.lat,
       lng: userLocation.lng,
       photo: capturedPhoto,
@@ -180,6 +188,7 @@ export default function App() {
     setBillboards([newBillboard, ...billboards]);
     setIsAdding(false);
     setCapturedPhoto(null);
+    setBillboardName('');
   };
 
   return (
@@ -234,12 +243,24 @@ export default function App() {
           >
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-xl font-bold">Yeni Billboard Ekle</h2>
-              <button onClick={() => setIsAdding(false)} className="p-2 text-gray-400">
+              <button onClick={() => { setIsAdding(false); setBillboardName(''); }} className="p-2 text-gray-400">
                 <X size={24} />
               </button>
             </div>
 
             <div className="flex-1 space-y-6 overflow-y-auto pb-24">
+              {/* Name Input */}
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Billboard İsmi</label>
+                <input
+                  type="text"
+                  value={billboardName}
+                  onChange={(e) => setBillboardName(e.target.value)}
+                  placeholder="Örn: Milas Kavşağı A-102"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                />
+              </div>
+
               {/* Photo Preview / Upload */}
               <div 
                 onClick={() => fileInputRef.current?.click()}
@@ -335,17 +356,18 @@ export default function App() {
               ) : (
                 billboards.map(bb => (
                   <div key={bb.id} className="bg-white/5 rounded-2xl p-4 border border-white/10 flex gap-4">
-                    <img src={bb.photo} className="w-24 h-24 rounded-xl object-cover" alt={bb.district} />
+                    <img src={bb.photo} className="w-24 h-24 rounded-xl object-cover" alt={bb.name} />
                     <div className="flex-1 flex flex-col justify-between py-1">
                       <div>
-                        <h3 className="font-bold text-purple-400">{bb.district}</h3>
-                        <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                          <Clock size={12} />
+                        <h3 className="font-bold text-white">{bb.name}</h3>
+                        <p className="text-xs text-purple-400 font-medium">{bb.district}</p>
+                        <div className="flex items-center gap-1 text-[10px] text-gray-500 mt-1">
+                          <Clock size={10} />
                           {new Date(bb.timestamp).toLocaleString()}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 text-xs text-gray-500 font-mono">
-                        <MapPin size={12} />
+                      <div className="flex items-center gap-1 text-[10px] text-gray-600 font-mono">
+                        <MapPin size={10} />
                         {bb.lat.toFixed(4)}, {bb.lng.toFixed(4)}
                       </div>
                     </div>
